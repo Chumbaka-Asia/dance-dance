@@ -1,0 +1,6 @@
+.github/                export-ignore
+.gitignore              export-ignore
+.gitattributes          export-ignore
+external/               export-ignore
+test-files/             export-ignore
+scripts/bake_dances.py  export-ignore
