@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Template cutout and upload flow regression</title>
+<p>Serve the repository on localhost and open this page to check both upload paths.</p>
+<pre id="results">Running…</pre>
+<script src="../scripts/figure-core.js"></script>
+<script src="../scripts/template-cutout.js"></script>
+<script>
+(async () => {
+  const results = document.getElementById('results');
+  const lines = [];
+  function check(condition, message) {
+    if (!condition) throw new Error(message);
+    lines.push('PASS: ' + message); results.textContent = lines.join('\n');
+  }
+  async function until(predicate) {
+    for (let i = 0; i < 150; i++) {
+      if (predicate()) return;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error('Timed out waiting for upload UI');
+  }
+  try {
+    const template = new Image();
+    template.src = '../colouring-templates/template.jpg';
+    await template.decode();
+    const stencil = TemplateCutout.buildStencil(template);
+    const at = (x, y) => stencil.mask[(y - 200) * stencil.w + x - 440];
+    check(at(730, 350) === 1 && at(730, 650) === 1, 'Uncoloured head and body stay inside the stencil');
+    check(at(730, 850) === 0, 'The background between the feet is removed');
+    check(at(450, 350) === 0 && at(1015, 650) === 0, 'Paper beside the character is removed');
+    check(at(730, 205) === 0, 'The printed heading underline is excluded');
+    const mesh = FigureCore.generateMesh(stencil, { gridDensity: 12 });
+    check(mesh.vertices.length > 15 && mesh.triangles.length > 15, 'Template silhouette produces a usable dance mesh');
+
+    // Add colour to a full-sheet photo without changing the template outline.
+    const photo = document.createElement('canvas');
+    photo.width = template.naturalWidth; photo.height = template.naturalHeight;
+    const pc = photo.getContext('2d');
+    pc.drawImage(template, 0, 0);
+    pc.fillStyle = '#e64980'; pc.fillRect(685, 300, 100, 100);
+    const blob = await new Promise(resolve => photo.toBlob(resolve, 'image/png'));
+    for (const page of ['upload.html', 'dance-dance.html']) {
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'width:800px;height:1000px';
+      const loaded = new Promise(resolve => frame.addEventListener('load', resolve, { once: true }));
+      frame.src = '../' + page; document.body.appendChild(frame);
+      await loaded;
+      await until(() => frame.contentWindow.TemplateCutout && frame.contentDocument.getElementById('fileInput'));
+      const doc = frame.contentDocument, win = frame.contentWindow;
+      if (page === 'dance-dance.html') doc.getElementById('tabAdd').click();
+      // Exercise the same input change handler as a camera/file selection.
+      const transfer = new win.DataTransfer();
+      transfer.items.add(new win.File([blob], 'coloured-template.png', { type: 'image/png' }));
+      const input = doc.getElementById('fileInput');
+      const retry = new win.DataTransfer();
+      retry.items.add(new win.File([blob], 'coloured-template.png', { type: 'image/png' }));
+      input.files = retry.files; input.dispatchEvent(new win.Event('change'));
+      await until(() => !doc.getElementById('templateClipBtn').disabled);
+      const visible = id => doc.getElementById(id).getClientRects().length > 0;
+      check(visible('segSection') && !visible('rigSection') && !visible('danceSection'), page + ': photo stops at background removal');
+      check(doc.getElementById('segApplyBtn').disabled, page + ': skeleton is gated until the background is removed');
+      const alignment = doc.getElementById('templateAlignCanvas');
+      const original = alignment.toDataURL();
+      const zoom = doc.getElementById('templateZoom');
+      zoom.value = 110; zoom.dispatchEvent(new win.Event('input'));
+      check(alignment.toDataURL() !== original, page + ': alignment changes the photo preview');
+      const rotation = doc.getElementById('templateRotate');
+      rotation.value = 10; rotation.dispatchEvent(new win.Event('input'));
+      check(doc.getElementById('templateRotateValue').textContent === '10°', page + ': rotation control updates');
+      doc.getElementById('templateResetBtn').click();
+      check(alignment.toDataURL() === original, page + ': alignment reset restores the photo');
+      doc.getElementById('templateClipBtn').click();
+      check(!doc.getElementById('segApplyBtn').disabled && visible('segCanvas'), page + ': cutout is reviewed before joints');
+      const preview = doc.getElementById('segCanvas');
+      const pixel = preview.getContext('2d').getImageData(Math.round((735 - 440) * preview._scale), Math.round((350 - 200) * preview._scale), 1, 1).data;
+      check(pixel[0] > 200 && pixel[1] < 100 && pixel[2] > 100, page + ': the child\'s colours survive clipping');
+      const rect = preview.getBoundingClientRect();
+      const brush = () => {
+        preview.dispatchEvent(new win.MouseEvent('mousedown', { clientX: rect.left + (735 - 440) * preview._scale * rect.width / preview.width, clientY: rect.top + (350 - 200) * preview._scale * rect.height / preview.height }));
+        win.dispatchEvent(new win.MouseEvent('mouseup'));
+      };
+      const colouredPreview = preview.toDataURL();
+      brush();
+      check(preview.toDataURL() !== colouredPreview, page + ': erase brush edits the template cutout');
+      doc.getElementById('brushKeepBtn').click(); brush();
+      check(preview.toDataURL() === colouredPreview, page + ': keep brush restores original photo pixels');
+      doc.getElementById('brushEraseBtn').click();
+      // Verify the actual clipped canvas has transparent paper and an opaque
+      // uncoloured head, rather than relying on the preview's dark background.
+      const originalMesh = win.FigureCore.generateMesh;
+      win.FigureCore.generateMesh = (seg, options) => {
+        const data = seg.textureCanvas.getContext('2d').getImageData(0, 0, seg.w, seg.h).data;
+        check(data[((350 - 200) * seg.w + 450 - 440) * 4 + 3] === 0, page + ': outside paper is transparent');
+        check(data[((280 - 200) * seg.w + 730 - 440) * 4 + 3] === 255, page + ': white inside the character is preserved');
+        return originalMesh(seg, options);
+      };
+      doc.getElementById('templateRealignBtn').click();
+      check(doc.getElementById('segApplyBtn').disabled, page + ': realigning requires a fresh cutout');
+      doc.getElementById('templateClipBtn').click();
+      doc.getElementById('segApplyBtn').click();
+      check(visible('rigSection') && !visible('segSection'), page + ': explicit Next opens skeleton setup');
+      win.FigureCore.generateMesh = originalMesh;
+      doc.getElementById('segStartOverBtn').click();
+      check(visible('uploadCard') && !visible('rigSection'), page + ': start over resets the flow');
+      input.files = transfer.files; input.dispatchEvent(new win.Event('change'));
+      await until(() => !doc.getElementById('templateClipBtn').disabled);
+      const mode = doc.getElementById('cutoutMode');
+      mode.value = 'plain'; mode.dispatchEvent(new win.Event('change'));
+      check(visible('segCanvas') && !visible('templateAlignPanel') && visible('segSensitivitySlider'), page + ': free drawing keeps the sensitivity editor');
+      // An in-flight sensitivity update must not replace a template cutout.
+      const slider = doc.getElementById('segSensitivitySlider');
+      slider.value = 55; slider.dispatchEvent(new win.Event('input'));
+      mode.value = 'template'; mode.dispatchEvent(new win.Event('change'));
+      await until(() => !doc.getElementById('templateClipBtn').disabled);
+      doc.getElementById('templateClipBtn').click();
+      await new Promise(resolve => setTimeout(resolve, 250));
+      check(!visible('segSensitivitySlider') && !doc.getElementById('segApplyBtn').disabled, page + ': switching modes keeps template cutout active');
+      frame.remove();
+    }
+    results.textContent = lines.join('\n') + '\nALL CHECKS PASSED';
+    document.title = 'PASS: Template cutout';
+  } catch (e) {
+    results.textContent = lines.join('\n') + '\nFAIL: ' + e.message;
+    document.title = 'FAIL: Template cutout';
+  }
+})();
+</script>
+</html>

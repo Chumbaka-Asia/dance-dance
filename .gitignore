@@ -1,0 +1,25 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Exhibition hub runtime persistence
+dancers-data.json
+
+# AI / Agent instructions & local notes
+AGENTS.md
+CLAUDE.md
+.cursor/
+.copilot/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dance-Dance — add a dancer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --stage-dark:#1a1220; --spot-warm:#ffb56b; --spot-cool:#7fa8e0;
+    --ink-cream:#f5ecdf; --ink-dim:#c9bfd6;
+    --panel:rgba(20,14,30,0.82); --panel-edge:rgba(245,236,223,0.14);
+    --accent:#ffd58a; --error:#e8735a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0; min-height:100%; background:radial-gradient(120% 100% at 50% 0%, #2e1f3d 0%, #1a1330 60%, #120c22 100%); color:var(--ink-cream); font-family:'JetBrains Mono', ui-monospace, monospace;}
+  h1,h2{font-family:'Unbounded', sans-serif;}
+  #page{max-width:560px; margin:0 auto; padding:28px 20px 60px;}
+  .eyebrow{font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-dim); font-weight:500; display:block; margin-bottom:4px;}
+  h1{margin:0 0 10px; font-size:20px; font-weight:700;}
+  #connStatus{font-size:11px; color:var(--ink-dim); margin-bottom:20px;}
+  #connStatus.live{color:var(--accent);}
+
+  .card{background:var(--panel); border:1px solid var(--panel-edge); border-radius:18px; padding:26px; margin-bottom:20px; backdrop-filter:blur(6px);}
+  .card h2{margin:0 0 6px; font-size:18px; font-weight:500;}
+  .card p.hint{margin:0 0 18px; font-size:12.5px; line-height:1.6; color:var(--ink-dim);}
+
+  #dropZone{border:2px dashed var(--panel-edge); border-radius:14px; padding:34px 20px; text-align:center; cursor:pointer;}
+  #dropZone:hover, #dropZone.drag-over{border-color:var(--spot-warm); background:rgba(255,181,107,0.08);}
+  #dropZone .icon{font-size:32px; display:block; margin-bottom:10px;}
+  #fileInput{display:none;}
+
+  #segSection, #rigSection, #danceSection, #previewSec{display:none;}
+  .stage-canvas-wrap{position:relative; width:100%; max-width:480px; margin:0 auto 14px; border-radius:12px; overflow:hidden; background:#0c0813;}
+  .stage-canvas-wrap canvas{display:block; width:100%; height:auto; touch-action:none;}
+  .joint-dot{position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:var(--spot-warm); border:2px solid #1a1330; cursor:grab; z-index:5; pointer-events:auto; touch-action:none;}
+  .joint-dot.driven{background:var(--spot-cool);}
+  #boneOverlay{position:absolute; inset:0; pointer-events:none;}
+
+  button.ghost{appearance:none; border:1px solid var(--panel-edge); background:transparent; color:var(--ink-cream); font-family:inherit; font-size:12.5px; padding:10px 16px; border-radius:10px; cursor:pointer;}
+  button.ghost:hover{border-color:var(--spot-warm);}
+  button.ghost.active{border-color:var(--spot-warm); color:var(--spot-warm);}
+  button.solid{appearance:none; border:none; background:var(--spot-warm); color:#1a1220; font-family:inherit; font-size:12.5px; font-weight:500; padding:10px 18px; border-radius:10px; cursor:pointer; flex:1;}
+  button.solid:hover{background:var(--accent);}
+  button.solid:disabled{opacity:0.5; cursor:default;}
+  .btn-row{display:flex; gap:10px; margin-top:16px;}
+
+  .settings-group{margin:18px 0;}
+  .settings-group-row{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px;}
+  .settings-group-row label{font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-dim);}
+  .settings-group-value{font-size:12px; color:var(--spot-warm);}
+  input[type=range]{width:100%; accent-color:var(--spot-warm);}
+
+  .dance-picker{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;}
+  .dance-picker button{border:1px solid var(--panel-edge); background:transparent; color:var(--ink-dim); font-family:inherit; font-size:12px; padding:8px 14px; border-radius:999px; cursor:pointer;}
+  .dance-picker button.active{border-color:var(--spot-warm); color:var(--spot-warm);}
+
+  #nameInput{width:100%; padding:10px 12px; border-radius:10px; margin-bottom:14px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.2); color:var(--ink-cream); font-family:inherit; font-size:13px;}
+  #previewCanvasWrap canvas{width:100%; max-height:260px; margin:0 auto 14px; display:block; border-radius:10px; background:#0c0813;}
+  #bakeProgress{height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; margin:10px 0;}
+  #bakeProgressBar{height:100%; width:0%; background:var(--spot-warm); transition:width 0.15s linear;}
+
+  #errorMsg, #successMsg, #confirmSuccessMsg{display:none; font-size:12px; padding:10px 12px; border-radius:10px; margin-top:12px;}
+  #errorMsg{color:var(--error); background:rgba(232,115,90,0.12); border:1px solid rgba(232,115,90,0.3);}
+  #successMsg, #confirmSuccessMsg{color:var(--accent); background:rgba(255,213,138,0.1); border:1px solid rgba(255,213,138,0.3);}
+  [hidden]{display:none !important;}
+</style>
+</head>
+<body>
+<div id="page">
+  <span class="eyebrow">Dance-Dance</span>
+  <h1>Bring your drawing to life</h1>
+  <p id="connStatus"></p>
+  <div id="errorMsg" role="alert"></div>
+
+  <div class="card" id="uploadCard">
+    <h2>Add a dancer</h2>
+    <p class="hint">Colour the <a href="colouring-templates/template.jpg" target="_blank" rel="noopener" style="color:var(--spot-warm);">character template</a>, then photograph the sheet. You can also upload a free drawing. Next, remove the background and place the joints.</p>
+    <div id="dropZone" tabindex="0" role="button" aria-label="Add a photo of your drawing">
+      <span class="icon">🕺</span>
+      <span class="label">Tap to add a photo</span>
+      <span class="sub" style="display:block; font-size:11px; color:var(--ink-dim); margin-top:6px;">or drop an image here</span>
+    </div>
+    <input id="fileInput" type="file" accept="image/*" capture="environment">
+  </div>
+
+
+  <div class="card" id="confirmSec" style="display:none;">
+    <h2>Ready to dance!</h2>
+    <p class="hint" id="confirmDanceMsg">Surprise dance picked!</p>
+    <div class="stage-canvas-wrap"><canvas id="confirmCanvasGL"></canvas></div>
+    <div class="btn-row">
+      <button class="solid" id="confirmJoinBtn" style="font-size:15px; padding:13px 22px;">Join the floor</button>
+    </div>
+    <div class="btn-row">
+      <button class="ghost" id="confirmFixCutoutBtn">Fix cutout</button>
+      <button class="ghost" id="confirmAdjustJointsBtn">Adjust joints</button>
+      <button class="ghost" id="confirmChangeDanceBtn">Change dance</button>
+    </div>
+    <input id="confirmNameInput" type="text" maxlength="40" placeholder="Give your dancer a name (optional)" style="width:100%; padding:10px 12px; border-radius:10px; margin-top:12px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.2); color:var(--ink-cream); font-family:inherit; font-size:13px;">
+    <div id="confirmSuccessMsg" role="status">Your dancer is stepping onto the floor…</div>
+  </div>
+
+  <div class="card" id="segSection">
+    <h2>Lift it off the page</h2>
+    <p class="hint">Remove the paper around your character, then check the cutout. Use the Keep and Erase brushes for any touch-ups before placing the joints.</p>
+    <div class="settings-group" style="margin-bottom:16px;">
+        <label for="cutoutMode">Drawing type</label>
+        <select id="cutoutMode" style="display:block;width:100%;margin-top:8px;padding:10px;border-radius:10px;background:#241a30;color:var(--ink-cream);border:1px solid var(--panel-edge);font:inherit;">
+          <option value="template">Coloured character template</option>
+          <option value="plain">Free drawing</option>
+        </select>
+      </div>
+      <div id="templateAlignPanel" hidden>
+        <p class="hint">Drag your photo until the character matches the amber outline. Adjust size and rotation, then remove the background.</p>
+        <div class="stage-canvas-wrap"><canvas id="templateAlignCanvas" width="590" height="700" aria-label="Drag to align your photo with the character outline" style="touch-action:none;cursor:grab;"></canvas></div>
+        <div class="settings-group" style="margin-bottom:12px;">
+          <div class="settings-group-row"><label for="templateZoom">Photo size</label><span id="templateZoomValue">100%</span></div>
+          <input id="templateZoom" type="range" min="20" max="300" value="100" step="1">
+        </div>
+        <div class="settings-group" style="margin-bottom:16px;">
+          <div class="settings-group-row"><label for="templateRotate">Rotation</label><span id="templateRotateValue">0&deg;</span></div>
+          <input id="templateRotate" type="range" min="-180" max="180" value="0" step="1">
+        </div>
+        <div class="btn-row">
+          <button class="ghost" id="templateResetBtn">Reset alignment</button>
+          <button class="solid" id="templateClipBtn" disabled>Remove background</button>
+        </div>
+      </div>
+      <button class="ghost" id="templateRealignBtn" hidden style="margin-bottom:14px;">Adjust photo alignment</button>
+      <div class="settings-group" style="margin:0 0 16px;">
+      <div class="settings-group-row"><label for="segSensitivitySlider">Background removal sensitivity</label><span class="settings-group-value" id="segSensitivityValue">Default</span></div>
+      <input type="range" id="segSensitivitySlider" min="0" max="100" step="1" value="50">
+    </div>
+    <div class="stage-canvas-wrap"><canvas id="segCanvas"></canvas></div>
+    <div class="btn-row">
+      <button class="ghost" id="brushKeepBtn">Keep brush</button>
+      <button class="ghost" id="brushEraseBtn">Erase brush</button>
+    </div>
+    <div class="btn-row">
+      <button class="ghost" id="segStartOverBtn">Start over</button>
+      <button class="solid" id="segApplyBtn">Next: place joints</button>
+    </div>
+  </div>
+
+  <div class="card" id="rigSection">
+    <h2>Place the joints</h2>
+    <p class="hint">Drag each dot onto the matching joint of your drawing. Cool dots move the most in a dance — get those close.</p>
+    <div class="stage-canvas-wrap" id="rigCanvasWrap">
+      <canvas id="rigCanvas"></canvas>
+      <div id="boneOverlay"></div>
+    </div>
+    <div class="btn-row">
+      <button class="ghost" id="rigResetBtn">Reset positions</button>
+      <button class="solid" id="rigApplyBtn">Looks good</button>
+    </div>
+  </div>
+
+  <div class="card" id="danceSection">
+    <h2>Pick a dance</h2>
+    <div class="dance-picker" id="dancePicker"></div>
+    <input id="nameInput" type="text" maxlength="40" placeholder="Give your dancer a name (optional)">
+    <div id="bakeProgress"><div id="bakeProgressBar"></div></div>
+    <div class="btn-row">
+      <button class="ghost" id="danceBackBtn">Back</button>
+      <button class="solid" id="danceBakeBtn">Preview the dance</button>
+    </div>
+  </div>
+
+  <div class="card" id="previewSec">
+    <h2>Ready to dance</h2>
+    <div id="previewCanvasWrap" class="stage-canvas-wrap"><canvas id="previewCanvasGL"></canvas></div>
+    <div class="btn-row">
+      <button class="ghost" id="startOverBtn">Change dance</button>
+      <button class="solid" id="submitBtn">Join the floor</button>
+    </div>
+    <div id="successMsg" role="status">Your dancer is stepping onto the floor…</div>
+  </div>
+</div>
+
+<script src="scripts/figure-core.js"></script>
+<script src="scripts/template-cutout.js"></script>
+<script src="scripts/arap.js"></script>
+<script src="scripts/dances.js"></script>
+<script src="scripts/renderer.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const SYNC_CHANNEL = 'dance-dance';
+  const STORAGE_KEY = 'dance-dance-dancers';
+
+  const isNetwork = location.protocol !== 'file:';
+  const connStatus = document.getElementById('connStatus');
+  connStatus.textContent = isNetwork ? 'connected to dance-floor server' : 'saving to this device (open the floor in another tab to see it sync)';
+  connStatus.classList.toggle('live', isNetwork);
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const uploadCard = document.getElementById('uploadCard');
+  const segSection = document.getElementById('segSection');
+  const rigSection = document.getElementById('rigSection');
+  const danceSection = document.getElementById('danceSection');
+  const previewSec = document.getElementById('previewSec');
+  const errorMsg = document.getElementById('errorMsg');
+  const successMsg = document.getElementById('successMsg');
+
+  function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+  function clearError() { errorMsg.style.display = 'none'; }
+
+  let flow = null;
+
+  // The texture as the renderer and the stored record want it: cropped to
+  // the mesh bbox, which is the rectangle the UVs are normalised against.
+  // The editors keep drawing flow.segCurrent.textureCanvas instead, since
+  // their brush and joint coordinates are in full-frame mask space.
+  function flowTexture() {
+    return window.FigureCore.buildExportTexture(flow.segCurrent, flow.mesh);
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) processFile(file);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) processFile(fileInput.files[0]); });
+
+  function processFile(file) {
+    clearError();
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => { flow = { photo: img }; runSegmentation(img); };
+      img.onerror = () => showError('Could not read that image — try another photo.');
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---- preview playback ----
+  const confirmSec = document.getElementById('confirmSec');
+  const confirmCanvasGL = document.getElementById('confirmCanvasGL');
+  const confirmDanceMsg = document.getElementById('confirmDanceMsg');
+  const confirmNameInput = document.getElementById('confirmNameInput');
+  const confirmSuccessMsg = document.getElementById('confirmSuccessMsg');
+  let confirmRenderer = null, confirmBuffers = null, confirmRAF = null;
+
+  function stopConfirmPlayback() {
+    if (confirmRAF) { cancelAnimationFrame(confirmRAF); confirmRAF = null; }
+  }
+
+  function startConfirmPlayback() {
+    if (!confirmRenderer) confirmRenderer = new window.DanceRenderer(confirmCanvasGL);
+    confirmRenderer.resize(440, 260);
+    if (confirmBuffers) confirmRenderer.destroyDancerBuffers(confirmBuffers);
+    confirmBuffers = confirmRenderer.createDancerBuffers(flow.mesh, flowTexture());
+    stopConfirmPlayback();
+    const t0 = performance.now();
+    function loop(now) {
+      const elapsed = Math.max(0, (now - t0) / 1000);
+      const n = flow.baked.frameCount;
+      const f = ((Math.floor(elapsed * flow.baked.fps) % n) + n) % n;
+      confirmRenderer.clear(0.09, 0.06, 0.13, 1);
+      confirmRenderer.drawDancer(confirmBuffers, flow.baked.frames[f], { x: 220, y: 200, scale: 200 / confirmBuffers.meshSize, alpha: 1, tint: [1, 1, 1] });
+      confirmRAF = requestAnimationFrame(loop);
+    }
+    confirmRAF = requestAnimationFrame(loop);
+  }
+
+  function copyConfirmNameToLegacy() {
+    if (confirmNameInput.value) nameInput.value = confirmNameInput.value;
+  }
+
+  document.getElementById('confirmFixCutoutBtn').addEventListener('click', () => {
+    stopConfirmPlayback();
+    confirmSec.style.display = 'none';
+    copyConfirmNameToLegacy();
+    segSection.style.display = 'block';
+    drawSegPreview();
+  });
+  document.getElementById('confirmAdjustJointsBtn').addEventListener('click', () => {
+    stopConfirmPlayback();
+    confirmSec.style.display = 'none';
+    copyConfirmNameToLegacy();
+    rigSection.style.display = 'block';
+    drawRigEditor();
+  });
+  document.getElementById('confirmChangeDanceBtn').addEventListener('click', () => {
+    stopConfirmPlayback();
+    confirmSec.style.display = 'none';
+    copyConfirmNameToLegacy();
+    danceSection.style.display = 'block';
+    buildDancePicker();
+  });
+
+  const segCanvas = document.getElementById('segCanvas');
+  const segSensitivitySlider = document.getElementById('segSensitivitySlider');
+  const segSensitivityValue = document.getElementById('segSensitivityValue');
+  let segTimer = null;
+
+  function sliderToThreshold(s) {
+    const def = window.FigureCore.BG_DIST2_THRESHOLD;
+    // Log-scale: 0 → 5× (conservative), 50 → 1× (default), 100 → 0.2× (aggressive)
+    const multiplier = Math.exp(Math.log(5) + (Math.log(0.2) - Math.log(5)) * (s / 100));
+    return Math.round(def * multiplier);
+  }
+  function updateSegSensitivityLabel(s) {
+    if (s === 50) { segSensitivityValue.textContent = 'Default'; return; }
+    segSensitivityValue.textContent = s < 50 ? (s < 25 ? 'Gentle' : 'Moderate') : (s > 75 ? 'Strong' : 'Moderate+');
+  }
+  segSensitivitySlider.addEventListener('input', () => {
+    const s = parseInt(segSensitivitySlider.value, 10);
+    updateSegSensitivityLabel(s);
+    if (!flow || !flow.photo || flow.cutoutMode !== 'plain') return;
+    clearTimeout(segTimer);
+    segTimer = setTimeout(() => {
+      if (!flow || document.getElementById('cutoutMode').value !== 'plain') return;
+      flow.strokes = [];
+      flow.segThreshold = s;
+      try {
+        flow.seg = window.FigureCore.segmentDrawing(flow.photo, sliderToThreshold(s));
+        drawSegPreview();
+      } catch (e) { /* slider movement may produce a transient bad threshold — ignore */ }
+    }, 200);
+  });
+
+  let brushMode = 'erase';
+  document.getElementById('brushKeepBtn').addEventListener('click', () => setBrush('keep'));
+  document.getElementById('brushEraseBtn').addEventListener('click', () => setBrush('erase'));
+  function setBrush(mode) {
+    brushMode = mode;
+    document.getElementById('brushKeepBtn').classList.toggle('active', mode === 'keep');
+    document.getElementById('brushEraseBtn').classList.toggle('active', mode === 'erase');
+  }
+  setBrush('erase');
+
+  const templateEditor = window.TemplateCutout.create({
+    onCutout(seg) {
+      clearTimeout(segTimer);
+      clearError();
+      flow.seg = seg;
+      flow.strokes = [];
+      flow.cutoutMode = 'template';
+      drawSegPreview();
+    },
+    onPlain(img) {
+      clearTimeout(segTimer);
+      clearError();
+      flow.cutoutMode = 'plain';
+      try {
+        const s = parseInt(segSensitivitySlider.value, 10);
+        flow.segThreshold = s;
+        flow.seg = window.FigureCore.segmentDrawing(img, sliderToThreshold(s));
+        flow.strokes = [];
+        drawSegPreview();
+      } catch (e) {
+        document.getElementById('segApplyBtn').disabled = true;
+        showError('Could not process that photo — try a clearer, well-lit shot.');
+      }
+    },
+    onError: showError
+  });
+
+  function runSegmentation(img) {
+    clearTimeout(segTimer);
+    uploadCard.style.display = 'none';
+    flow.cameFromConfirm = false;
+    segSection.style.display = 'block';
+    templateEditor.open(img);
+  }
+
+  function drawSegPreview() {
+    const seg = window.FigureCore.applyTouchUp(flow.seg, flow.strokes);
+    flow.segCurrent = seg;
+    const maxW = 460;
+    const scale = Math.min(1, maxW / seg.w);
+    segCanvas.width = Math.round(seg.w * scale);
+    segCanvas.height = Math.round(seg.h * scale);
+    const ctx = segCanvas.getContext('2d');
+    ctx.fillStyle = '#241a30';
+    ctx.fillRect(0, 0, segCanvas.width, segCanvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(seg.textureCanvas, 0, 0, segCanvas.width, segCanvas.height);
+    segCanvas._scale = scale;
+  }
+
+  let segDragging = false, segLastPos = null;
+  function segBrushAt(clientX, clientY) {
+    const rect = segCanvas.getBoundingClientRect();
+    const x = (clientX - rect.left) / segCanvas._scale * (segCanvas.width / rect.width);
+    const y = (clientY - rect.top) / segCanvas._scale * (segCanvas.height / rect.height);
+    const r = Math.max(4, flow.seg.w * 0.02);
+    // Interpolate between consecutive positions so fast finger movement
+    // produces a continuous stroke, not a trail of disconnected dots.
+    if (segLastPos) {
+      const d = Math.hypot(x - segLastPos.x, y - segLastPos.y);
+      const steps = Math.max(1, Math.ceil(d / (r * 0.6)));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        flow.strokes.push({ x: segLastPos.x + (x - segLastPos.x) * t, y: segLastPos.y + (y - segLastPos.y) * t, r, mode: brushMode });
+      }
+    } else {
+      flow.strokes.push({ x, y, r, mode: brushMode });
+    }
+    segLastPos = { x, y };
+    drawSegPreview();
+  }
+  function endBrushStroke() { segDragging = false; segLastPos = null; }
+  segCanvas.addEventListener('mousedown', e => { segDragging = true; segLastPos = null; segBrushAt(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', e => { if (segDragging) segBrushAt(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', endBrushStroke);
+  segCanvas.addEventListener('touchstart', e => { segDragging = true; segLastPos = null; const t = e.touches[0]; segBrushAt(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+  segCanvas.addEventListener('touchmove', e => { if (segDragging) { const t = e.touches[0]; segBrushAt(t.clientX, t.clientY); e.preventDefault(); } }, { passive: false });
+  segCanvas.addEventListener('touchend', endBrushStroke);
+
+  document.getElementById('segStartOverBtn').addEventListener('click', resetFlow);
+  document.getElementById('segApplyBtn').addEventListener('click', () => {
+    try {
+      flow.mesh = window.FigureCore.generateMesh(flow.segCurrent, { gridDensity: 12 });
+      // Silhouette-aware guess first; it falls back to the bbox fit
+      // per-joint when the shape is ambiguous, so it is always usable.
+      flow.skeleton = window.FigureCore.fitSkeletonToSilhouette(flow.segCurrent).skeleton;
+      segSection.style.display = 'none';
+      rigSection.style.display = 'block';
+      drawRigEditor();
+    } catch (e) {
+      console.error(e);
+      showError(e.message || 'Could not build a mesh from that cutout — try the touch-up brush or a different photo.');
+    }
+  });
+
+  const rigCanvas = document.getElementById('rigCanvas');
+  const boneOverlay = document.getElementById('boneOverlay');
+
+  function drawRigEditor() {
+    const seg = flow.segCurrent;
+    const maxW = 460;
+    const scale = Math.min(1, maxW / seg.w);
+    rigCanvas.width = Math.round(seg.w * scale);
+    rigCanvas.height = Math.round(seg.h * scale);
+    const ctx = rigCanvas.getContext('2d');
+    ctx.fillStyle = '#241a30';
+    ctx.fillRect(0, 0, rigCanvas.width, rigCanvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(seg.textureCanvas, 0, 0, rigCanvas.width, rigCanvas.height);
+    rigCanvas._scale = scale;
+    // The canvas is displayed at CSS width:100% which may differ from its
+    // intrinsic pixel size on narrow viewports (mobile).  Dots and bones
+    // are positioned in CSS pixels — compute the ratio so they stay aligned
+    // with the canvas content regardless of CSS scaling.
+    const rect = rigCanvas.getBoundingClientRect();
+    rigCanvas._cssScaleX = rect.width / rigCanvas.width;
+    rigCanvas._cssScaleY = rect.height / rigCanvas.height;
+
+    boneOverlay.querySelectorAll('.joint-dot').forEach(el => el.remove());
+    flow.skeleton.forEach(j => {
+      const el = document.createElement('div');
+      el.className = 'joint-dot' + (window.FigureCore.DRIVEN_BONES.includes(j.name) ? ' driven' : '');
+      el.title = j.name;
+      boneOverlay.appendChild(el);
+      const dot = { joint: j, el };
+      positionDot(dot);
+      makeDraggable(dot);
+    });
+    drawBones();
+  }
+
+  function positionDot(dot) {
+    dot.el.style.left = (dot.joint.loc[0] * rigCanvas._scale * rigCanvas._cssScaleX) + 'px';
+    dot.el.style.top = (dot.joint.loc[1] * rigCanvas._scale * rigCanvas._cssScaleY) + 'px';
+  }
+
+  function drawBones() {
+    boneOverlay.querySelectorAll('svg').forEach(el => el.remove());
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', rigCanvas.width);
+    svg.setAttribute('height', rigCanvas.height);
+    svg.style.position = 'absolute'; svg.style.left = 0; svg.style.top = 0; svg.style.pointerEvents = 'none';
+    flow.skeleton.forEach(j => {
+      if (!j.parent) return;
+      const p = window.FigureCore.jointByName(flow.skeleton, j.parent);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', p.loc[0] * rigCanvas._scale * rigCanvas._cssScaleX); line.setAttribute('y1', p.loc[1] * rigCanvas._scale * rigCanvas._cssScaleY);
+      line.setAttribute('x2', j.loc[0] * rigCanvas._scale * rigCanvas._cssScaleX); line.setAttribute('y2', j.loc[1] * rigCanvas._scale * rigCanvas._cssScaleY);
+      line.setAttribute('stroke', 'rgba(255,213,138,0.5)'); line.setAttribute('stroke-width', '2');
+      svg.appendChild(line);
+    });
+    boneOverlay.insertBefore(svg, boneOverlay.firstChild);
+  }
+
+  function makeDraggable(dot) {
+    let dragging = false;
+    function move(clientX, clientY) {
+      const rect = rigCanvas.getBoundingClientRect();
+      const x = (clientX - rect.left) * (rigCanvas.width / rect.width) / rigCanvas._scale;
+      const y = (clientY - rect.top) * (rigCanvas.height / rect.height) / rigCanvas._scale;
+      dot.joint.loc = [x, y];
+      positionDot(dot);
+      drawBones();
+    }
+    dot.el.addEventListener('touchstart', e => { dragging = true; e.stopPropagation(); const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+    dot.el.addEventListener('touchmove', e => { if (dragging) { const t = e.touches[0]; move(t.clientX, t.clientY); e.preventDefault(); } }, { passive: false });
+    dot.el.addEventListener('touchend', () => { dragging = false; });
+    dot.el.addEventListener('mousedown', e => { dragging = true; e.stopPropagation(); });
+    window.addEventListener('mousemove', e => { if (dragging) move(e.clientX, e.clientY); });
+    window.addEventListener('mouseup', () => { dragging = false; });
+  }
+
+  document.getElementById('rigResetBtn').addEventListener('click', () => {
+    flow.skeleton = window.FigureCore.fitSkeletonToBBox(flow.mesh.vertices);
+    drawRigEditor();
+  });
+  document.getElementById('rigApplyBtn').addEventListener('click', () => {
+    rigSection.style.display = 'none';
+    danceSection.style.display = 'block';
+    buildDancePicker();
+  });
+
+  const dancePicker = document.getElementById('dancePicker');
+  const nameInput = document.getElementById('nameInput');
+  const bakeProgressBar = document.getElementById('bakeProgressBar');
+  function buildDancePicker() {
+    dancePicker.innerHTML = '';
+    const names = Object.keys(window.DanceData.dances);
+    flow.dance = flow.dance || names[0];
+    names.forEach(name => {
+      const btn = document.createElement('button');
+      btn.textContent = name.replace(/_/g, ' ');
+      btn.className = name === flow.dance ? 'active' : '';
+      btn.addEventListener('click', () => {
+        flow.dance = name;
+        dancePicker.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      dancePicker.appendChild(btn);
+    });
+  }
+  document.getElementById('danceBackBtn').addEventListener('click', () => {
+    danceSection.style.display = 'none';
+    rigSection.style.display = 'block';
+  });
+  document.getElementById('danceBakeBtn').addEventListener('click', () => {
+    bakeProgressBar.style.width = '0%';
+    setTimeout(() => {
+      try {
+        const result = window.DanceBaker.bakeDeformedFrames(flow.mesh, flow.skeleton, flow.dance, p => { bakeProgressBar.style.width = Math.round(p * 100) + '%'; });
+        flow.baked = result;
+        danceSection.style.display = 'none';
+        previewSec.style.display = 'block';
+        startPreviewPlayback();
+      } catch (e) {
+        console.error(e);
+        showError(e.message || 'Could not bake that dance — try adjusting the joint positions.');
+      }
+    }, 20);
+  });
+
+  const previewCanvasGL = document.getElementById('previewCanvasGL');
+  let previewRenderer = null, previewBuffers = null, previewRAF = null;
+  function startPreviewPlayback() {
+    if (!previewRenderer) previewRenderer = new window.DanceRenderer(previewCanvasGL);
+    previewRenderer.resize(440, 260);
+    if (previewBuffers) previewRenderer.destroyDancerBuffers(previewBuffers);
+    previewBuffers = previewRenderer.createDancerBuffers(flow.mesh, flowTexture());
+    if (previewRAF) cancelAnimationFrame(previewRAF);
+    const t0 = performance.now();
+    function loop(now) {
+      const elapsed = Math.max(0, (now - t0) / 1000);
+      const n = flow.baked.frameCount;
+      const f = ((Math.floor(elapsed * flow.baked.fps) % n) + n) % n;
+      previewRenderer.clear(0.09, 0.06, 0.13, 1);
+      previewRenderer.drawDancer(previewBuffers, flow.baked.frames[f], { x: 220, y: 200, scale: 200 / previewBuffers.meshSize, alpha: 1, tint: [1, 1, 1] });
+      previewRAF = requestAnimationFrame(loop);
+    }
+    previewRAF = requestAnimationFrame(loop);
+  }
+
+  document.getElementById('startOverBtn').addEventListener('click', () => {
+    if (previewRAF) cancelAnimationFrame(previewRAF);
+    previewSec.style.display = 'none';
+    danceSection.style.display = 'block';
+  });
+
+  function resetFlow() {
+    clearTimeout(segTimer);
+    templateEditor.reset();
+    flow = null;
+    fileInput.value = ''; nameInput.value = ''; confirmNameInput.value = '';
+    if (previewRAF) cancelAnimationFrame(previewRAF);
+    stopConfirmPlayback();
+    segSensitivitySlider.value = 50;
+    updateSegSensitivityLabel(50);
+    uploadCard.style.display = 'block';
+    confirmSec.style.display = 'none';
+    segSection.style.display = 'none';
+    rigSection.style.display = 'none';
+    danceSection.style.display = 'none';
+    previewSec.style.display = 'none';
+    clearError();
+  }
+
+  // file:// mode (no server): same localStorage + BroadcastChannel fallback
+  // dance-dance.html itself uses for two-tab/same-folder sync.
+  function submitLocal(rec) {
+    try {
+      let arr = [];
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) arr = JSON.parse(raw);
+      arr.push(rec);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    } catch (e) {
+      showError('Could not save your dancer — your device storage may be full.');
+      return false;
+    }
+    try {
+      const bc = new BroadcastChannel(SYNC_CHANNEL);
+      bc.postMessage({ type: 'new-dancer', record: rec });
+      bc.close();
+    } catch (e) { /* BroadcastChannel unsupported — localStorage write above still syncs on reload */ }
+    return true;
+  }
+
+  // http(s):// mode: server.py persists the dancer and pushes it to every
+  // dance-floor screen listening on /api/events.
+  function submitNetwork(rec) {
+    return fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rec),
+    }).then(res => { if (!res.ok) throw new Error('submit failed: ' + res.status); });
+  }
+
+  // Shared by the legacy preview card's submit and the streamlined
+  // confirm card's "Join the floor" button.
+  function submitFlow(nameValue, btn, successEl) {
+    if (!flow || !flow.mesh) return Promise.resolve(false);
+    clearError();
+    btn.disabled = true;
+
+    return window.FigureCore.serializeDancer(flow.mesh, flow.skeleton, flowTexture(), nameValue, flow.dance)
+      .then(rec => {
+        const done = () => {
+          successEl.style.display = 'block';
+          setTimeout(() => {
+            btn.disabled = false;
+            successEl.style.display = 'none';
+            resetFlow();
+          }, 1500);
+        };
+        const fail = err => {
+          console.error(err);
+          btn.disabled = false;
+          showError('Could not send your dancer — check the connection and try again.');
+        };
+
+        if (isNetwork) {
+          return submitNetwork(rec).then(done).catch(fail);
+        }
+        if (submitLocal(rec)) done();
+        else btn.disabled = false;
+      })
+      .catch(err => {
+        console.error(err);
+        btn.disabled = false;
+        showError('Could not prepare your dancer — try again.');
+      });
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', () =>
+    submitFlow(nameInput.value.trim(), document.getElementById('submitBtn'), successMsg));
+  document.getElementById('confirmJoinBtn').addEventListener('click', () =>
+    submitFlow(confirmNameInput.value.trim(), document.getElementById('confirmJoinBtn'), confirmSuccessMsg));
+})();
+</script>
+</body>
+</html>

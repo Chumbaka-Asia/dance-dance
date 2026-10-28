@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dance-Dance | Floor archive</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --night: #130e1c;
+    --plum: #261a32;
+    --card: #21182c;
+    --line: rgba(255, 231, 204, .15);
+    --cream: #f7ede1;
+    --muted: #c5b8c9;
+    --gold: #f8bd72;
+    --rose: #f28f8b;
+    --blue: #9dbce6;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--cream);
+    background: radial-gradient(ellipse 65% 38% at 50% 0%, #49304b 0%, transparent 72%),
+                radial-gradient(ellipse 40% 35% at 100% 55%, #262446 0%, transparent 80%),
+                var(--night);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: .25;
+    background-image: repeating-linear-gradient(90deg, transparent 0 83px, rgba(255,255,255,.035) 84px 85px),
+                      repeating-linear-gradient(0deg, transparent 0 83px, rgba(255,255,255,.025) 84px 85px);
+  }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible, .drop-zone:focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 3px;
+  }
+  [hidden] { display: none !important; }
+  .page { position: relative; max-width: 1440px; padding: 0 32px 88px; margin: auto; }
+  .masthead { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 31px 0; border-bottom: 1px solid var(--line); }
+  .brand { font-size: 13px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+  .brand-mark { display: inline-block; width: 11px; height: 11px; margin-right: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 5px rgba(248,189,114,.14); }
+  .masthead-note, .eyebrow, .stat-label, .field-label, .card-index, .card-id, .card-date, .file-note, .count, .footer {
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .masthead-note { color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 420px); align-items: end; gap: 56px; padding: 68px 0 52px; }
+  .eyebrow { margin: 0 0 18px; color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+  h1 { max-width: 850px; margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(52px, 7.3vw, 112px); line-height: .91; font-weight: 400; letter-spacing: -.065em; }
+  h1 em { color: var(--gold); font-weight: 400; }
+  .intro-copy { max-width: 610px; margin: 26px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+  .drop-zone { display: flex; flex-direction: column; justify-content: center; min-height: 232px; padding: 26px; border: 1.5px dashed rgba(248,189,114,.5); border-radius: 18px; background: linear-gradient(145deg, rgba(248,189,114,.12), rgba(157,188,230,.05)); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--gold); background: rgba(248,189,114,.16); transform: translateY(-2px); }
+  .drop-icon { width: 43px; height: 43px; display: grid; place-items: center; margin-bottom: 17px; border: 1px solid var(--line); border-radius: 50%; color: var(--gold); font-size: 25px; line-height: 1; }
+  .drop-title { margin: 0 0 6px; font-size: 19px; font-weight: 700; }
+  .drop-help { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .pick-button { align-self: flex-start; border: 0; border-radius: 999px; padding: 11px 19px; background: var(--gold); color: #211321; font-size: 13px; font-weight: 800; }
+  .drop-zone:hover .pick-button { background: #ffd59f; }
+  .file-note { margin: 13px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+  .status { margin-bottom: 28px; padding: 13px 17px; border: 1px solid var(--line); border-radius: 10px; color: var(--cream); background: rgba(255,255,255,.045); font-size: 13px; line-height: 1.5; }
+  .status.error { border-color: rgba(242,143,139,.5); color: #ffd4ce; background: rgba(242,143,139,.1); }
+  .archive-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 18px 0 20px; border-top: 1px solid var(--line); }
+  .archive-title { margin: 0 0 5px; font-family: Georgia, "Times New Roman", serif; font-size: 34px; font-weight: 400; letter-spacing: -.04em; }
+  .archive-subtitle { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .stat { text-align: right; white-space: nowrap; }
+  .stat-number { display: block; color: var(--gold); font-family: Georgia, "Times New Roman", serif; font-size: 48px; line-height: 1; }
+  .stat-label { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+  .toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 13px; margin: 10px 0 24px; }
+  .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .field.search { flex: 1 1 245px; max-width: 390px; }
+  .field-label { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+  .field input, .field select { width: 100%; min-height: 43px; padding: 0 13px; border: 1px solid var(--line); border-radius: 9px; color: var(--cream); background: #21182c; }
+  .field input::placeholder { color: #a99bac; }
+  .field select { min-width: 175px; }
+  .count { margin: 0 0 11px auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .export-button { min-height: 43px; padding: 0 16px; border: 1px solid var(--gold); border-radius: 9px; color: #211321; background: var(--gold); font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .export-button:hover { background: #ffd59f; }
+  .export-button:disabled { cursor: default; opacity: .5; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 19px; }
+  .card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: 0 12px 28px rgba(6,3,13,.15); transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .card:hover { transform: translateY(-4px); border-color: rgba(248,189,114,.55); box-shadow: 0 19px 36px rgba(6,3,13,.3); }
+  .art { position: relative; display: grid; place-items: center; aspect-ratio: 1 / 1; padding: 21px; overflow: hidden; background: radial-gradient(circle at 50% 36%, #44304d, #1a1428 72%); }
+  .art::after { content: ""; position: absolute; width: 66%; height: 9%; bottom: 10%; border-radius: 50%; background: rgba(4,3,10,.3); filter: blur(12px); }
+  .art img { position: relative; z-index: 1; display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 12px 8px rgba(0,0,0,.3)); }
+  .card-index { position: absolute; z-index: 2; top: 12px; left: 12px; padding: 5px 8px; border-radius: 5px; color: var(--cream); background: rgba(17,11,25,.78); font-size: 11px; }
+  .card-body { padding: 17px 18px 18px; border-top: 1px solid var(--line); }
+  .card-name { margin: 0 0 8px; font-family: Georgia, "Times New Roman", serif; font-size: 24px; line-height: 1.15; font-weight: 400; overflow-wrap: anywhere; }
+  .dance-tag { display: inline-block; max-width: 100%; margin-bottom: 17px; padding: 5px 9px; border: 1px solid rgba(157,188,230,.3); border-radius: 999px; color: var(--blue); font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+  .card-id, .card-date { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+  .card-id { color: #ddd1dd; }
+  .empty { padding: 70px 24px; border: 1px dashed var(--line); border-radius: 14px; text-align: center; color: var(--muted); }
+  .empty strong { display: block; margin-bottom: 6px; color: var(--cream); font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 400; }
+  .footer { margin-top: 58px; padding-top: 21px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.6; }
+  @media (max-width: 780px) {
+    .page { padding: 0 19px 55px; }
+    .intro { grid-template-columns: 1fr; gap: 31px; padding: 48px 0 36px; }
+    .drop-zone { min-height: 185px; }
+  }
+  @media (max-width: 500px) {
+    .masthead-note { display: none; }
+    .archive-title { font-size: 29px; }
+    .stat-number { font-size: 38px; }
+    .field, .field.search { flex: 1 1 100%; max-width: none; }
+    .field select { min-width: 0; }
+    .count { width: 100%; margin: 0; }
+    .export-button { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .drop-zone, .card { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Dance-Dance</div>
+    <div class="masthead-note">The floor archive / local viewer</div>
+  </header>
+
+  <section class="intro" aria-labelledby="page-title">
+    <div>
+      <p class="eyebrow">Every drawing has a story</p>
+      <h1 id="page-title">Meet the <em>dancers.</em></h1>
+      <p class="intro-copy">Open a Dance-Dance floor export to see every drawing in the troupe, along with its dance, ID, and arrival time.</p>
+    </div>
+    <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Choose or drop a Dance-Dance JSON export">
+      <div class="drop-icon" aria-hidden="true">↥</div>
+      <p class="drop-title">Bring in a floor export</p>
+      <p class="drop-help">Drop a JSON file here, or choose one from your device.</p>
+      <span class="pick-button">Choose JSON file</span>
+      <p class="file-note">Runs in this browser. Your file stays on this device.</p>
+    </div>
+    <input id="fileInput" type="file" accept=".json,application/json" hidden>
+  </section>
+
+  <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+
+  <section id="archive" aria-labelledby="archive-title" hidden>
+    <div class="archive-head">
+      <div>
+        <h2 id="archive-title" class="archive-title">The archive</h2>
+        <p id="archiveSubtitle" class="archive-subtitle"></p>
+      </div>
+      <div class="stat"><span id="totalCount" class="stat-number">0</span><span class="stat-label">dancers</span></div>
+    </div>
+    <div class="toolbar">
+      <label class="field search"><span class="field-label">Find a dancer</span><input id="searchInput" type="search" placeholder="Search name or ID" autocomplete="off"></label>
+      <label class="field"><span class="field-label">Dance</span><select id="danceFilter"><option value="">All dances</option></select></label>
+      <label class="field"><span class="field-label">Order</span><select id="sortOrder"><option value="original">Export order</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+      <p id="resultCount" class="count" aria-live="polite"></p>
+      <button id="exportButton" class="export-button" type="button" disabled>Download HTML gallery</button>
+    </div>
+    <div id="gallery" class="gallery"></div>
+    <div id="empty" class="empty" hidden><strong>No dancers found.</strong>Try another search or dance.</div>
+  </section>
+
+  <footer class="footer">Dance-Dance · A local view of your saved floor</footer>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const fileInput = document.getElementById('fileInput');
+  const dropZone = document.getElementById('dropZone');
+  const status = document.getElementById('status');
+  const archive = document.getElementById('archive');
+  const gallery = document.getElementById('gallery');
+  const empty = document.getElementById('empty');
+  const searchInput = document.getElementById('searchInput');
+  const danceFilter = document.getElementById('danceFilter');
+  const sortOrder = document.getElementById('sortOrder');
+  const resultCount = document.getElementById('resultCount');
+  const exportButton = document.getElementById('exportButton');
+  const pageTemplate = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  let dancers = [];
+  let loadNumber = 0;
+  let sourceText = null;
+  let sourceName = '';
+
+  function setStatus(message, isError = false) {
+    status.textContent = message;
+    status.classList.toggle('error', isError);
+    status.hidden = !message;
+  }
+
+  function displayDance(value) {
+    return value ? value.replace(/_/g, ' ') : 'Unknown dance';
+  }
+
+  function displayDate(value) {
+    const timestamp = Number(value);
+    return Number.isFinite(timestamp) && timestamp > 0 && Number.isFinite(new Date(timestamp).getTime())
+      ? dateFormatter.format(new Date(timestamp)) : 'Unknown date';
+  }
+
+  function makeCard(dancer) {
+    const card = document.createElement('article');
+    card.className = 'card';
+    const art = document.createElement('div');
+    art.className = 'art';
+    const index = document.createElement('span');
+    index.className = 'card-index';
+    index.textContent = '#' + String(dancer.index + 1).padStart(3, '0');
+    const image = document.createElement('img');
+    image.src = dancer.textureDataURL;
+    image.alt = dancer.name ? 'Drawing of ' + dancer.name : 'Dancer drawing ' + (dancer.index + 1);
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    art.append(index, image);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    const name = document.createElement('h3');
+    name.className = 'card-name';
+    name.textContent = dancer.name || 'Unnamed dancer';
+    const dance = document.createElement('div');
+    dance.className = 'dance-tag';
+    dance.textContent = displayDance(dancer.dance);
+    const id = document.createElement('p');
+    id.className = 'card-id';
+    id.textContent = 'ID: ' + dancer.id;
+    const date = document.createElement('p');
+    date.className = 'card-date';
+    date.textContent = 'Joined: ' + displayDate(dancer.createdAt);
+    body.append(name, dance, id, date);
+    card.append(art, body);
+    return card;
+  }
+
+  function render() {
+    const query = searchInput.value.trim().toLocaleLowerCase();
+    const dance = danceFilter.value;
+    const visible = dancers.filter(dancer =>
+      (!dance || dancer.dance === dance) &&
+      (!query || dancer.name.toLocaleLowerCase().includes(query) || dancer.id.toLocaleLowerCase().includes(query))
+    );
+    if (sortOrder.value !== 'original') {
+      const direction = sortOrder.value === 'newest' ? -1 : 1;
+      visible.sort((a, b) => direction * ((Number(a.createdAt) || 0) - (Number(b.createdAt) || 0)) || a.index - b.index);
+    }
+    const fragment = document.createDocumentFragment();
+    visible.forEach(dancer => fragment.appendChild(makeCard(dancer)));
+    gallery.replaceChildren(fragment);
+    empty.hidden = visible.length !== 0;
+    resultCount.textContent = visible.length + ' of ' + dancers.length + ' shown';
+  }
+
+  function downloadGallery() {
+    if (sourceText === null) return;
+    try {
+      const position = pageTemplate.lastIndexOf('</body>');
+      if (position < 0) throw new Error('Could not prepare the gallery page.');
+      const payload = '<scr' + 'ipt id="embedded-export" type="application/json" data-file-name="' +
+        encodeURIComponent(sourceName) + '">' + sourceText.replace(/</g, '\\u003c') + '</scr' + 'ipt>\n';
+      const html = pageTemplate.slice(0, position) + payload + pageTemplate.slice(position);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const stem = sourceName.replace(/\.json$/i, '').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120) || 'dance-dance-floor';
+      link.href = url;
+      link.download = stem + '-gallery.html';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      setStatus('Could not download the gallery: ' + error.message, true);
+    }
+  }
+
+  async function loadFile(file) {
+    if (!file) return;
+    const currentLoad = ++loadNumber;
+    setStatus('Opening ' + file.name + '…');
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of Dance-Dance dancers.');
+      const valid = parsed.flatMap((record, index) => {
+        if (!record || typeof record !== 'object' || typeof record.id !== 'string' ||
+            typeof record.textureDataURL !== 'string' ||
+            !/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(record.textureDataURL)) return [];
+        return [{
+          index, id: record.id, name: typeof record.name === 'string' ? record.name.trim() : '',
+          dance: typeof record.dance === 'string' ? record.dance : '',
+          createdAt: record.createdAt, textureDataURL: record.textureDataURL
+        }];
+      });
+      if (parsed.length && !valid.length) throw new Error('No dancer records with embedded images were found.');
+      if (currentLoad !== loadNumber) return;
+      dancers = valid;
+      searchInput.value = '';
+      sortOrder.value = 'original';
+      danceFilter.replaceChildren(new Option('All dances', ''));
+      [...new Set(dancers.map(d => d.dance).filter(Boolean))].sort().forEach(dance =>
+        danceFilter.add(new Option(displayDance(dance), dance))
+      );
+      document.getElementById('archiveSubtitle').textContent = file.name;
+      document.getElementById('totalCount').textContent = dancers.length.toLocaleString();
+      archive.hidden = false;
+      render();
+      sourceText = text;
+      sourceName = file.name;
+      exportButton.disabled = false;
+      const skipped = parsed.length - dancers.length;
+      setStatus(skipped ? 'Loaded ' + dancers.length + ' dancers; skipped ' + skipped + ' records without a usable image.' : '');
+      if (!dancers.length) {
+        empty.hidden = false;
+        empty.querySelector('strong').textContent = 'This floor is empty.';
+      } else {
+        empty.querySelector('strong').textContent = 'No dancers found.';
+      }
+    } catch (error) {
+      if (currentLoad === loadNumber) setStatus('Could not open “' + file.name + '”: ' + error.message, true);
+    }
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', event => {
+    if (event.target === dropZone && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
+  fileInput.addEventListener('change', () => {
+    loadFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+  let dragDepth = 0;
+  document.addEventListener('dragenter', event => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    dragDepth++;
+    dropZone.classList.add('drag-over');
+  });
+  document.addEventListener('dragover', event => {
+    if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+  });
+  document.addEventListener('dragleave', event => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) dropZone.classList.remove('drag-over');
+  });
+  document.addEventListener('drop', event => {
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault();
+    dragDepth = 0;
+    dropZone.classList.remove('drag-over');
+    loadFile(event.dataTransfer.files[0]);
+  });
+  searchInput.addEventListener('input', render);
+  danceFilter.addEventListener('change', render);
+  sortOrder.addEventListener('change', render);
+  exportButton.addEventListener('click', downloadGallery);
+  document.addEventListener('DOMContentLoaded', () => {
+    const embedded = document.getElementById('embedded-export');
+    if (embedded) loadFile({
+      name: decodeURIComponent(embedded.dataset.fileName || 'dance-dance-floor.json'),
+      text: async () => embedded.textContent
+    });
+  });
+})();
+</script>
+</body>
+</html>
