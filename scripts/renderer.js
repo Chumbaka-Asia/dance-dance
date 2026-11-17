@@ -14,7 +14,7 @@
     uniform vec2 uTranslate;
     uniform float uScale;
     uniform vec2 uMeshCenter;
-    uniform vec2 uViewport; // stage pixel size
+    uniform vec2 uViewport; // stage size in CSS pixels (same units as transforms)
     varying vec2 vUV;
     void main() {
       vec2 local = (aPos - uMeshCenter) * uScale;
@@ -94,7 +94,9 @@
     this.canvas.style.width = cssW + 'px';
     this.canvas.style.height = cssH + 'px';
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    this.viewportPx = [this.canvas.width, this.canvas.height];
+    // Transforms are in CSS pixels; only the drawing buffer uses device pixels.
+    this.viewportCss = [cssW, cssH];
+    this.pixelRatio = dpr;
   };
 
   DanceRenderer.prototype.clear = function (r, g, b, a) {
@@ -196,7 +198,7 @@
     gl.uniform2f(loc.uTranslate, transform.x, transform.y);
     gl.uniform1f(loc.uScale, transform.scale);
     gl.uniform2f(loc.uMeshCenter, buffers.meshCenter[0], buffers.meshCenter[1]);
-    gl.uniform2f(loc.uViewport, this.viewportPx[0], this.viewportPx[1]);
+    gl.uniform2f(loc.uViewport, this.viewportCss[0], this.viewportCss[1]);
     gl.uniform1f(loc.uAlpha, transform.alpha != null ? transform.alpha : 1);
     const tint = transform.tint || [1, 1, 1];
     gl.uniform3f(loc.uTint, tint[0], tint[1], tint[2]);

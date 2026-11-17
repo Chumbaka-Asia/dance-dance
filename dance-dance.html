@@ -185,6 +185,11 @@
       <div class="settings-group">
         <div class="settings-group-row"><label for="sizeSlider">Dancer size</label><span class="settings-group-value" id="sizeValue">100%</span></div>
         <input type="range" id="sizeSlider" min="50" max="200" step="5" value="100">
+        <div class="btn-row">
+          <button class="ghost" id="redistributeBtn" type="button" aria-describedby="redistributeHint" disabled>Redistribute dancers</button>
+        </div>
+        <p class="hint" id="redistributeHint" style="margin:8px 0 0; font-size:11.5px;">Randomly reposition everyone on the current stage.</p>
+        <p class="sr-only" id="redistributeStatus" role="status" aria-live="polite"></p>
       </div>
       <div class="settings-group">
         <div class="settings-group-row"><label>Display text</label></div>
@@ -941,6 +946,7 @@
   const dancers = []; // on-stage only; admission order also determines retirement
   const roster = new Map(); // id -> plain record for EVERY real dancer ever stored (on-stage or backstage)
   const pendingDancerLoads = new Map();
+  const redistributeBtn = document.getElementById('redistributeBtn');
   let stageRenderer = null;
   let sizeMultiplier = 1;
   const STAGE_ROTATION_MS = 50000; // how often backstage dancers get a turn on stage
@@ -957,10 +963,11 @@
 
   function updateCountHud() {
     const n = dancers.length;
+    redistributeBtn.disabled = n === 0;
     document.getElementById('dancerCount').textContent = n === 0 ? 'the floor is waiting' : n + (n === 1 ? ' dancer on the floor' : ' dancers on the floor');
   }
 
-  function layoutDancer(d, w, h, floor) {
+  function getStageLayoutBounds(w, h, floor) {
     // Use a count-independent margin so arrivals/removals never move neighbours.
     // This covers the largest normal dancer at the current viewport and size.
     const margin = Math.min(w / 5, 160) * sizeMultiplier * 1.15 * 0.6;
@@ -968,11 +975,25 @@
     const floorTop = Math.max(0, Math.min(h, floor.top));
     const floorBottom = Math.max(floorTop, Math.min(h, floor.bottom));
     const marginY = Math.min(margin, (floorBottom - floorTop) / 2);
-    const bandTop = floorTop + marginY, bandBottom = floorBottom - marginY;
+    return { left: marginX, right: w - marginX, top: floorTop + marginY, bottom: floorBottom - marginY };
+  }
+
+  function layoutDancer(d, w, h, floor) {
+    const bounds = getStageLayoutBounds(w, h, floor);
     return {
-      x: marginX + d.stageX * (w - 2 * marginX),
-      y: bandTop + (d.stageY * 0.9 + d.z * 0.1) * (bandBottom - bandTop),
+      x: bounds.left + d.stageX * (bounds.right - bounds.left),
+      y: bounds.top + d.stageY * (bounds.bottom - bounds.top),
     };
+  }
+
+  function redistributeDancers() {
+    resizeStage();
+    // Independent positions allow natural clusters and gaps. layoutDancer
+    // maps these normalized coordinates into the current floor margins.
+    dancers.forEach(d => {
+      d.stageX = Math.random();
+      d.stageY = Math.random();
+    });
   }
 
   function shuffleDrawOrder() {
@@ -1124,7 +1145,7 @@
     }
     pendingDancerLoads.delete(d.id);
     d.stageX = Math.random();
-    d.stageY = Math.random();
+    d.stageY = Math.random() * 0.9 + d.z * 0.1;
     d.drawOrder = Math.random();
     d.admissionOrder = nextAdmissionOrder++;
     if (d.liveEntrance) d.enteredAt = performance.now();
@@ -1480,7 +1501,12 @@
   const stageCanvas = document.getElementById('stageGL');
   function resizeStage() {
     if (!stageRenderer) return;
-    stageRenderer.resize(window.innerWidth, window.innerHeight);
+    const w = window.innerWidth, h = window.innerHeight;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const viewport = stageRenderer.viewportCss;
+    if (!viewport || viewport[0] !== w || viewport[1] !== h || stageRenderer.pixelRatio !== dpr) {
+      stageRenderer.resize(w, h);
+    }
   }
   window.addEventListener('resize', resizeStage);
 
@@ -1646,6 +1672,7 @@
 
   function frame(now) {
     const w = window.innerWidth, h = window.innerHeight;
+    resizeStage();
     if (backdropCanvas.width !== w || backdropCanvas.height !== h) { backdropCanvas.width = w; backdropCanvas.height = h; }
     drawFloorBackdrop(backdropCtx, w, h, now);
 
@@ -1862,6 +1889,15 @@
   const maxRealValue = document.getElementById('maxRealValue');
   const sizeSlider = document.getElementById('sizeSlider');
   const sizeValue = document.getElementById('sizeValue');
+  const redistributeStatus = document.getElementById('redistributeStatus');
+  redistributeBtn.addEventListener('click', () => {
+    if (!dancers.length) return;
+    redistributeDancers();
+    // A fresh node also announces subsequent clicks with the same message.
+    const message = document.createElement('span');
+    message.textContent = 'Dancers redistributed';
+    redistributeStatus.replaceChildren(message);
+  });
   const spotlightOnBtn = document.getElementById('spotlightOnBtn');
   const spotlightOffBtn = document.getElementById('spotlightOffBtn');
   const spotlightIntervalSlider = document.getElementById('spotlightIntervalSlider');
