@@ -192,6 +192,14 @@
         <p class="sr-only" id="redistributeStatus" role="status" aria-live="polite"></p>
       </div>
       <div class="settings-group">
+        <div class="settings-group-row"><label for="floorExtensionSlider">Dancer placement height</label><span class="settings-group-value" id="floorExtensionValue">Default</span></div>
+        <input type="range" id="floorExtensionSlider" min="0" max="100" step="1" value="0" aria-describedby="floorExtensionHint" aria-valuetext="Default height">
+        <p class="hint" id="floorExtensionHint" style="margin:6px 0 0; font-size:11.5px;">Extend the placement area upward toward the top of the screen.</p>
+        <div class="btn-row">
+          <button class="ghost" id="resetFloorExtensionBtn" type="button">Reset placement height</button>
+        </div>
+      </div>
+      <div class="settings-group">
         <div class="settings-group-row"><label>Display text</label></div>
         <label class="text-row"><span>Title</span><input type="text" id="titleInput" maxlength="30" placeholder="The floor is open" autocomplete="off"></label>
         <label class="text-row"><span>Subtitle</span><input type="text" id="subtitleInput" maxlength="60" placeholder="Dance-Dance" autocomplete="off"></label>
@@ -366,11 +374,12 @@
   const SYNC_CHANNEL = 'dance-dance';
   const STORAGE_KEY = 'dance-dance-dancers';
   const UI_SETTINGS_KEY = 'dance-dance.settings';
-  const UI_SETTINGS_DEFAULTS = Object.freeze({ simCount: 1, maxReal: 50, sizePct: 100, spotlightOn: true, spotlightIntervalSec: 12 });
+  const UI_SETTINGS_DEFAULTS = Object.freeze({ simCount: 1, maxReal: 50, sizePct: 100, floorExtensionPct: 0, spotlightOn: true, spotlightIntervalSec: 12 });
   const UI_SETTINGS_BOUNDS = Object.freeze({
     simCount: Object.freeze({ min: 0, max: 40 }),
     maxReal: Object.freeze({ min: 10, max: 300 }),
     sizePct: Object.freeze({ min: 50, max: 200 }),
+    floorExtensionPct: Object.freeze({ min: 0, max: 100 }),
     spotlightIntervalSec: Object.freeze({ min: 6, max: 30 }),
   });
   let maxDancers = UI_SETTINGS_DEFAULTS.maxReal;
@@ -949,6 +958,7 @@
   const redistributeBtn = document.getElementById('redistributeBtn');
   let stageRenderer = null;
   let sizeMultiplier = 1;
+  let floorExtensionPct = UI_SETTINGS_DEFAULTS.floorExtensionPct;
   const STAGE_ROTATION_MS = 50000; // how often backstage dancers get a turn on stage
   const DRAW_ORDER_SHUFFLE_MS = 15000;
   let nextAdmissionOrder = 0;
@@ -972,9 +982,11 @@
     // This covers the largest normal dancer at the current viewport and size.
     const margin = Math.min(w / 5, 160) * sizeMultiplier * 1.15 * 0.6;
     const marginX = Math.min(margin, w / 2);
-    const floorTop = Math.max(0, Math.min(h, floor.top));
-    const floorBottom = Math.max(floorTop, Math.min(h, floor.bottom));
-    const marginY = Math.min(margin, (floorBottom - floorTop) / 2);
+    const defaultFloorTop = Math.max(0, Math.min(h, floor.top));
+    const floorBottom = Math.max(defaultFloorTop, Math.min(h, floor.bottom));
+    // Use the default band for padding so even a narrow floor keeps its bottom placement edge.
+    const marginY = Math.min(margin, (floorBottom - defaultFloorTop) / 2);
+    const floorTop = defaultFloorTop * (1 - floorExtensionPct / 100);
     return { left: marginX, right: w - marginX, top: floorTop + marginY, bottom: floorBottom - marginY };
   }
 
@@ -1550,10 +1562,7 @@
     ctx.drawImage(stageBgImage, r.dx, r.dy, r.dw, r.dh);
   }
 
-  // Where dancers are allowed to stand: the on-screen rectangle of the wood
-  // floor, derived from the same cover-fit rect the background is drawn
-  // with, so it tracks the current window size and never floats a dancer
-  // onto the curtain or off the front edge of the stage.
+  // The default placement band follows the wooden floor as the background is resized.
   function getFloorBounds(w, h) {
     if (!stageBgLoaded) return { top: h * 0.36, bottom: h * 0.91 };
     const r = coverRect(stageBgImage.naturalWidth, stageBgImage.naturalHeight, w, h);
@@ -1889,6 +1898,8 @@
   const maxRealValue = document.getElementById('maxRealValue');
   const sizeSlider = document.getElementById('sizeSlider');
   const sizeValue = document.getElementById('sizeValue');
+  const floorExtensionSlider = document.getElementById('floorExtensionSlider');
+  const floorExtensionValue = document.getElementById('floorExtensionValue');
   const redistributeStatus = document.getElementById('redistributeStatus');
   redistributeBtn.addEventListener('click', () => {
     if (!dancers.length) return;
@@ -1916,6 +1927,7 @@
       simCount: normalizeSetting(source.simCount, UI_SETTINGS_BOUNDS.simCount, UI_SETTINGS_DEFAULTS.simCount),
       maxReal: normalizeSetting(source.maxReal, UI_SETTINGS_BOUNDS.maxReal, UI_SETTINGS_DEFAULTS.maxReal),
       sizePct: normalizeSetting(source.sizePct, UI_SETTINGS_BOUNDS.sizePct, UI_SETTINGS_DEFAULTS.sizePct),
+      floorExtensionPct: normalizeSetting(source.floorExtensionPct, UI_SETTINGS_BOUNDS.floorExtensionPct, UI_SETTINGS_DEFAULTS.floorExtensionPct),
       spotlightOn: typeof source.spotlightOn === 'boolean' ? source.spotlightOn : UI_SETTINGS_DEFAULTS.spotlightOn,
       spotlightIntervalSec: normalizeSetting(source.spotlightIntervalSec, UI_SETTINGS_BOUNDS.spotlightIntervalSec, UI_SETTINGS_DEFAULTS.spotlightIntervalSec),
     };
@@ -1931,6 +1943,13 @@
     scheduleSpotlight();
   }
 
+  function applyFloorExtension(value) {
+    floorExtensionPct = value;
+    floorExtensionSlider.value = value;
+    floorExtensionValue.textContent = value === 0 ? 'Default' : value + '% extension';
+    floorExtensionSlider.setAttribute('aria-valuetext', value === 0 ? 'Default height' : value + '% of available upward space');
+  }
+
   function applyUiSettings(settings) {
     const normalized = normalizeUiSettings(settings);
     simCountSlider.value = normalized.simCount;
@@ -1941,6 +1960,7 @@
     sizeSlider.value = normalized.sizePct;
     sizeValue.textContent = normalized.sizePct + '%';
     sizeMultiplier = normalized.sizePct / 100;
+    applyFloorExtension(normalized.floorExtensionPct);
     spotlightEnabled = normalized.spotlightOn;
     spotlightIntervalMs = normalized.spotlightIntervalSec * 1000;
     spotlightIntervalSlider.value = normalized.spotlightIntervalSec;
@@ -1954,6 +1974,7 @@
     try {
       localStorage.setItem(UI_SETTINGS_KEY, JSON.stringify({
         simCount: parseInt(simCountSlider.value, 10), sizePct: parseInt(sizeSlider.value, 10), maxReal: parseInt(maxRealSlider.value, 10),
+        floorExtensionPct,
         spotlightOn: spotlightEnabled, spotlightIntervalSec: parseInt(spotlightIntervalSlider.value, 10),
       }));
     } catch (e) {}
@@ -1991,6 +2012,14 @@
   sizeSlider.addEventListener('input', () => {
     sizeValue.textContent = sizeSlider.value + '%';
     sizeMultiplier = parseInt(sizeSlider.value, 10) / 100;
+    saveUiSettings();
+  });
+  floorExtensionSlider.addEventListener('input', () => {
+    applyFloorExtension(floorExtensionSlider.valueAsNumber);
+    saveUiSettings();
+  });
+  document.getElementById('resetFloorExtensionBtn').addEventListener('click', () => {
+    applyFloorExtension(UI_SETTINGS_DEFAULTS.floorExtensionPct);
     saveUiSettings();
   });
   spotlightOnBtn.addEventListener('click', () => { spotlightEnabled = true; saveUiSettings(); applySpotlightUiState(); });

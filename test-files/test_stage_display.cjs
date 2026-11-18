@@ -108,6 +108,44 @@ async function main() {
   await waitFor('!!window.stageTest?.renderer');
   await waitFor('Array.from(document.images).every(image => image.complete)');
 
+  const placementHeight = await evaluate(`(() => {
+    const slider = document.getElementById("floorExtensionSlider");
+    const value = document.getElementById("floorExtensionValue");
+    const reset = document.getElementById("resetFloorExtensionBtn");
+    const settings = () => JSON.parse(localStorage.getItem("dance-dance.settings"));
+    const size = document.getElementById("sizeSlider");
+    size.value = 200;
+    size.dispatchEvent(new Event("input", { bubbles: true }));
+    const getBounds = () => {
+      const w = 1000, h = 140;
+      return stageTest.getStageLayoutBounds(w, h, stageTest.getFloorBounds(w, h));
+    };
+    const initialValue = slider.valueAsNumber;
+    const initial = getBounds();
+    slider.value = 100;
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+    const expanded = getBounds();
+    const savedExtension = settings().floorExtensionPct;
+    reset.click();
+    return { initialValue, initial, expanded, savedExtension, restored: getBounds(),
+      resetValue: slider.valueAsNumber, resetLabel: value.textContent,
+      resetExtension: settings().floorExtensionPct, sizePct: settings().sizePct };
+  })()`);
+  assert.equal(placementHeight.initialValue, 0, "Older settings should use the default placement height");
+  assert(placementHeight.expanded.top < placementHeight.initial.top);
+  assert.equal(placementHeight.expanded.bottom, placementHeight.initial.bottom);
+  assert.equal(placementHeight.savedExtension, 100);
+  assert.deepEqual(placementHeight.restored, placementHeight.initial);
+  assert.equal(placementHeight.resetValue, 0);
+  assert.equal(placementHeight.resetLabel, "Default");
+  assert.equal(placementHeight.resetExtension, 0);
+  assert.equal(placementHeight.sizePct, 200, "Placement reset should preserve dancer size");
+  await evaluate(`(() => {
+    const size = document.getElementById("sizeSlider");
+    size.value = 100;
+    size.dispatchEvent(new Event("input", { bubbles: true }));
+  })()`);
+
   let scenarios = 0;
   for (const [width, height] of [[1920, 1080], [2560, 1080], [480, 900]]) {
     for (const dpr of [1, 1.5, 2]) {
